@@ -1,0 +1,770 @@
+---
+title: "Automobile Data Analysis"
+author: "韩意朝"
+output:
+  html_document:
+    theme: darkly
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+    highlight: pygments
+    df_print: paged
+  word_document:
+    toc: yes
+---
+
+# **引言**
+
+汽车行业一直以来都是工业和经济领域中备受关注的一个重要领域。对于消费者来说，购车决策不仅涉及到个体交通需求的满足，更关乎投资回报和性价比的考量。为了更深入地探讨和理解汽车市场中的价格形成机制以及性能与价格之间的关系，我们借助了一个经典的数据集------1985 Auto Imports Database。
+
+数据来源：<http://archive.ics.uci.edu/ml/datasets/Automobile>
+
+该数据集源自多方数据渠道，包括1985年Model Import Car and Truck Specifications，个人汽车手册以及保险事故报告等，为我们提供了丰富而全面的汽车信息。通过对汽车的各项特征、保险风险评级以及相对平均损失等数据进行综合分析，我们将尝试建立几个分类模型或回归模型，以汽车详细信息作为输入来准确预测整车的档次或价格。
+
+# **摘要**
+
+本数据分析报告旨在深入探讨1985年汽车数据集，以揭示其中隐藏的信息和模式。首先，我们进行了数据清洗与整备，包括详细了解数据集信息、预处理数据以及处理缺失值。这确保了我们有一个干净、完整的数据集来进行后续分析。
+
+在探索性数据分析阶段，我们通过直方图、箱线图和小提琴图等可视化手段，深入研究了响应变量"价格"的分布特征，对不同类别变量进行了对比分析，并通过相关性热图和线性矩阵图揭示了数值型变量之间的关系。
+
+进一步进行了假设检验，分析了分类问题和回归问题。在分类问题中，我们通过数据预处理和模型性能比较，深入挖掘了不同模型的表现，并通过ROC曲线评估其分类能力。在回归问题中，通过光滑样条拟合、局部多项式和广义可加模型，我们试图找到对"价格"影响最显著的因素。
+
+最终，通过综合分析和总结，我们得出了对数据集的深刻理解，为进一步研究汽车性能和市场趋势提供了有力的参考。
+
+# **数据清洗与整备**
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse) #核心
+library(tidymodels)
+library(readxl) #读Excel
+library(writexl)#写Excel
+# 绘图用
+library(patchwork) # 将几张图绘制在一起
+library(plotly) # heatmaply前置
+library(viridis) # heatmaply前置
+library(heatmaply) #热图
+library(car) # scatterplotMatrix函数
+library(RColorBrewer) #颜色包
+library(ggpubr)
+#因子分析
+library(psych)
+#相关系数矩阵
+library(corrplot)
+library(tidytext)
+
+library(tidyverse)
+library(tidymodels)
+library(pheatmap)
+library(corrr)
+library(shiny)
+library(readxl)
+library(writexl)
+
+library(patchwork) # 将几张图绘制在一起
+library(plotly) # heatmaply前置
+library(viridis) # heatmaply前置
+library(heatmaply) #热图
+library(car) # scatterplotMatrix函数
+library(RColorBrewer) #颜色包
+```
+
+## **数据集详细信息**
+
+1.  保险风险等级：-3、-2、-1、0、1、2、3
+2.  归一化损失：从 65 到 256 连续
+3.  品牌： 阿尔法罗梅罗、奥迪、宝马、雪佛兰、道奇、本田、五十铃、捷豹、马自达、梅赛德斯-奔驰、水银、三菱、日产、标致、普利茅斯、保时捷、雷诺、萨博、斯巴鲁、丰田、大众、沃尔沃
+4.  燃料类型：柴油、汽油
+5.  增压机类型：标准，涡轮
+6.  车门数：四门、二门
+7.  车身风格：硬顶车、旅行车、轿车、掀背车、敞篷车
+8.  驱动轮：四轮驱动、前轮驱动、后轮驱动
+9.  发动机位置： 前部、后部
+10. 轴距：连续86.6 120.9
+11. 长度：从141.1到208.1连续
+12. 宽度：从60.3到72.3连续
+13. 高度：从47.8连续到59.8
+14. 整车重量：从1488连续到4066
+15. 发动机类型：dohc、dohcv、l、ohc、ohcf、ohcv、rotor
+16. 气缸数量：八、五、四、六、三、十二、二
+17. 发动机尺寸：从 61 到 326 连续
+18. 燃油系统：1bbl、2bbl、4bbl、idi、mfi、mpfi、spdi、spfi
+19. 缸径：从2.54到3.94连续
+20. 冲程：从2.07到4.17连续
+21. 压缩比：从 7 到 23 连续
+22. 马力：连续48至288
+23. 最大转速：从 4150 连续到 6600
+24. 城市路百公里油耗：从 13 连续到 49
+25. 高速路百公里油耗：从 16 连续到 54
+26. 价格：5118至45400连续
+
+数据集年份：1987 年 5 月 19 日
+
+## **数据预处理**
+
+```{r  warning=FALSE}
+automobile <- read_csv("data/imports-85.data", col_names = FALSE, na = "?")
+
+x = " 1. 保险风险等级：-3、-2、-1、0、1、2、3
+2. 归一化损失：从 65 到 256 连续
+3. 品牌： 阿尔法罗梅罗、奥迪、宝马、雪佛兰、道奇、本田、五十铃、捷豹、马自达、梅赛德斯-奔驰、水银、三菱、日产、标致、普利茅斯、保时捷、雷诺、萨博、斯巴鲁、丰田、大众、沃尔沃
+4. 燃料类型：柴油、汽油
+5. 增压机类型：标准，涡轮
+6. 车门数：四门、二门
+7. 车身风格：硬顶车、旅行车、轿车、掀背车、敞篷车
+8. 驱动轮：四轮驱动、前轮驱动、后轮驱动
+9. 发动机位置： 前部、后部
+10. 轴距：连续86.6 120.9
+11. 长度：从141.1到208.1连续
+12. 宽度：从60.3到72.3连续
+13. 高度：从47.8连续到59.8
+14. 整车重量：从1488连续到4066
+15. 发动机类型：dohc、dohcv、l、ohc、ohcf、ohcv、rotor
+16. 气缸数量：八、五、四、六、三、十二、二
+17. 发动机尺寸：从 61 到 326 连续
+18. 燃油系统：1bbl、2bbl、4bbl、idi、mfi、mpfi、spdi、spfi
+19. 缸径：从2.54到3.94连续
+20. 冲程：从2.07到4.17连续
+21. 压缩比：从 7 到 23 连续
+22. 马力：连续48至288
+23. 最大转速：从 4150 连续到 6600
+24. 城市路百公里油耗：从 13 连续到 49
+25. 高速路百公里油耗：从 16 连续到 54
+26. 价格：5118至45400连续 "
+
+# 使用正则表达式零宽断言：
+colnames(automobile) <- str_extract_all(x, "(?<=\\. ).*(?=：)")[[1]]
+# write_xlsx(automobile, path = "data/automobile.xlsx")
+
+```
+
+```{r warning=FALSE}
+head(automobile)
+```
+
+1.  dummy: 质量预测变量是否需要数值编码（例如，通过虚拟变量或其他方法）？
+
+2.  zv: 是否应该删除只有单一唯一值的列？
+
+3.  impute: 如果变量缺失，是否应该通过插补进行估算？
+
+4.  decorrelate: 如果存在相关的预测变量，是否应该减轻这种相关性？这可能意味着过滤掉一些预测变量，例如使用主成分分析，或者采用基于模型的技术（例如正则化）。
+
+5.  normalize: 预测变量是否应该进行中心化和缩放？
+
+6.  transform: 将预测变量转换为更对称的形式（如对数变换）是否有助于分析？
+
+## **缺失值的处理**
+
+阅读数据集信息知第二列"归一化损失"为主要缺失值来源,占比约20%
+
+其他列数据缺失值较少,可直接整行删除
+
+价格列有4个缺失值,可用于后续模型拟合,预测这四台车的价格
+
+```{r fig.height=2, fig.width=4}
+automobile|>
+  drop_na() |>
+  ggplot(aes(x=归一化损失,y=价格)) +
+  geom_point()
+x <- automobile |> drop_na() |> select(归一化损失)
+y <- automobile |> drop_na() |> select(价格)
+cor(x,y)
+
+```
+
+由散点图和cor可知"归一化损失"与"价格"相关程度不高
+
+```{r fig.height=2, fig.width=4}
+automobile|>
+  mutate(loss = is.na(归一化损失)) |> 
+  drop_na(价格) |> 
+  ggplot(aes(价格,loss)) +
+  theme_bw()+ 
+  geom_violin(trim = FALSE,color = "white", fill="#9ecae1") +
+  geom_boxplot(width=0.15,position = position_dodge(0.9),fill="white") 
+
+```
+
+由小提琴图知缺失值类型为非随机丢失,与响应变量价格有较大关联,不可丢弃;
+
+因此可以在因子分析时选择将此列(归一化损失)剔除,不作为数值型变量处理;
+
+# **探索性数据分析**
+
+## **响应变量"价格"的直方图**
+
+```{r fig.height=14, fig.width=14, message=FALSE, warning=FALSE}
+automobile <- read_excel("data/automobile.xlsx")|>
+  mutate(保险风险等级 = as.character(保险风险等级))
+auto_char <- automobile |> select(where(is.character),价格,-品牌)
+plot_list <- list()
+x_name <-colnames(auto_char|> select(-价格))
+for( i in x_name){
+  plot_list[[i]] <- automobile |> ggplot(aes(x=价格)) + 
+  geom_histogram(aes(fill = !!as.name(i))) +
+  theme(axis.text.x = element_text(angle = 45, vjust = TRUE, hjust = TRUE)) 
+}
+wrap_plots(plot_list, ncol = 2) 
+
+```
+
+由上述直方图可以看出：
+
+1.此次收集到的汽车价格为右偏分布，以中低价格为主，主要集中在5000-20000之间
+
+2.高端车（价格\>30000)的特征有：烧汽油（gas）、std（机械增压）、车身风格为（Convertible--敞篷/Hardtop--硬顶/Sedan--轿车）、rwd（后驱）、mpfi（多点燃油喷射系统）、多气缸（气缸数量\>=6）、；这些特征虽然加大油耗，但全部利好低速加速能力，与大众印象中的"高档车一般都是跑车"相吻合。
+
+3.低端车（价格\<10000)的特征有：保险风险等级高，多烧汽油（gas）、多为std（机械增压），车身风格多见于（Hatchback--掀背/Wagon--旅行/Sedan--轿车）、fwd（前驱）、发动机类型较原始（以ohc未改良版为主）、四汽缸、bbl（化油器）为主
+
+4.车门数量基本不影响价格
+
+5."发动机位置"变量中"rear"数据量极小（n=3），不可用于后续哑变量分析。
+
+图"增压机类型"中，std--普通增压，turbo--涡轮增压
+
+图"车身风格"中 ，Hatchback--掀背车；Sedan--轿车；Wagon--旅行车；Convertible--敞篷车；Hardtop--硬顶车
+
+图"驱动轮"中，fwd---前驱；rwd---后驱；4wd---四驱
+
+图"发动机类型"中：
+
+基础顶置凸轮轴：ohc
+
+混合顶置凸轮轴：ohcv（顶底混合），ohcf（顶前混合），dohc（双顶置混合）
+
+其他：l，rotor
+
+图"燃油系统"中：
+
+化油器：1bbl，2bbl（双腔），4bbl（四腔）
+
+单点燃油喷射系统：Spfi，spdi，idi
+
+多点燃油喷射系统：Mpfi，mfi
+
+## **分类别绘制箱线_小提琴图**
+
+```{r fig.height=5, fig.width=9, warning=FALSE}
+Draw_box <- function(data,x,y){
+  data |> 
+    drop_na() |>
+    ggplot(aes(fct_reorder(!!as.name({{x}}),{{y}}),{{y}})) +
+    geom_violin(trim = FALSE,color = "white", fill="#9ecae1") +
+    geom_boxplot(width=0.15,position = position_dodge(0.9),fill="white")+ 
+    theme_bw()+  #背景变为白色
+    theme(panel.grid.major = element_blank(),   
+          panel.grid.minor = element_blank()) +
+    theme(axis.text.x = element_text(angle = 60, vjust = TRUE, hjust = TRUE)) +
+    labs(x = x, y = "价格")
+}
+automobile |> select(品牌,价格) |> Draw_box("品牌",价格) +
+  labs(
+    title = "不同类别变量的价格箱线_小提琴图",
+    subtitle = "以价格中位数升序排序",
+    x = "品牌", y = "价格"
+  ) + geom_hline(yintercept = 20000, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = 12000, linetype = "dashed", color = "blue")
+
+```
+
+由上图可以看出,不同品牌间的定价存在两个"阶梯式跳跃",分别位于 mazda-saab , volve-bmw ;分析这是面向不同消费人群的定价策略,即"产品定位". 根据不同品牌的产品定位,可将它们由低到高分为 "经济型"(min,12000),"中端型"[12000,20000),"豪华型"[20000,max)三类;
+
+```{r fig.height=6, fig.width=14, warning=FALSE}
+plot_list <- list()
+for( i in x_name){
+  plot_list[[i]] <- Draw_box(auto_char,i,价格) + ylim(0,50000)
+}
+wrap_plots(plot_list, ncol = 5) 
+```
+
+## **对数值型变量绘制相关性热图**
+
+```{r fig.height=6, fig.width=9,message=FALSE, warning=FALSE}
+automobile <- read_excel("data/automobile.xlsx")
+auto_doublue <- automobile |> 
+  select(!where(is.character),-保险风险等级,-归一化损失) 
+#剔除归一化损失列
+auto_dcorr <- auto_doublue |> 
+  # select(-价格) |> 
+  drop_na()
+mat <- cor(auto_dcorr)
+p <- heatmaply(mat, 
+               colors = PiYG(20),
+               #dendrogram = "row",
+               xlab = "", ylab = "", 
+               main = "",
+               # scale = "column",
+               symm = TRUE,
+               k_col = 4,
+               k_row = 4,
+               grid_color = "white",
+               grid_width = 0.00001,
+               titleX = FALSE,
+               # hide_colorbar = TRUE,
+               branches_lwd = 0.6,
+               label_names = c("y", "x", "Corr"),
+               fontsize_row = 6, fontsize_col = 6,
+               labCol = colnames(mat),
+               labRow = rownames(mat),
+               heatmap_layers = theme(axis.line=element_blank()),
+               seriate = "GW"
+               # reversescale = T        
+)
+p
+
+```
+
+由相关性热图可知，数值型预测变量"高度"、"压缩比"、"冲程"，"最大转速"与其他数值型变量的关系不显著，也印证了2.2散点图中，这些变量与响应变量"价格"的关系不显著
+
+## **绘制线性矩阵图**
+
+由热图可以选择与价格相关程度高的自变量：
+
+轴距+长度+宽度+整车重量+发动机尺寸+缸径+马力+城市路百公里油耗+高速路百公里油耗
+
+```{r fig.height=7, fig.width=14,message=FALSE, warning=FALSE}
+scatterplotMatrix(~轴距+长度+宽度+整车重量+发动机尺寸+缸径+马力+城市路百公里油耗+高速路百公里油耗, 
+                  data=auto_doublue , reg.line=FALSE, col="#69b3a2", id.col="#69b3a2", smooth=FALSE , cex=1.5 , pch=20 )
+
+
+```
+
+由对角线可见各变量密度图；
+
+由上图可见，大部分数值型变量间相关系数较高，且全部为线性正相关，容易产生严重的多重共线性问题；
+
+```{r}
+colnames(auto_doublue)
+```
+
+选择与价格相关程度低的自变量：
+
+```{r fig.height=6, fig.width=10,message=FALSE, warning=FALSE}
+scatterplotMatrix(~轴距+高度+缸径+冲程+最大转速, 
+                  data=auto_doublue , reg.line=FALSE, col="#69b3a2", id.col="#69b3a2", smooth=FALSE , cex=1.5 , pch=20 )
+
+```
+
+发现这些变量之间的关系比较微妙，相关程度低
+
+# **假设检验**
+
+增压机类型是否影响车辆价格？设定a=0.05
+
+```{r fig.height=2, fig.width=4, warning=FALSE}
+plot_list[[3]]
+```
+
+```{r}
+null_distribution_cars <- auto_char |> drop_na() |>  
+  specify(formula = 价格 ~ 增压机类型) |>   
+  hypothesize(null = "independence") |>   
+  generate(reps = 1000, type = "permute") |>   
+  calculate(stat = "diff in means",order = c("std", "turbo")) 
+null_distribution_cars  
+```
+
+将均值差异保存在obs_diff_means中
+
+```{r}
+obs_diff_means <- auto_char |> drop_na()  %>%    
+  specify(formula = 价格 ~ 增压机类型) %>%  
+  calculate(stat = "diff in means", order = c("std", "turbo"))  
+obs_diff_means
+```
+
+可视化极端程度
+
+```{r}
+visualize(null_distribution_cars, bins = 10) +    
+  shade_p_value(obs_stat = obs_diff_means, direction = "both")
+```
+
+导出p值，即红色阴影部分面积
+
+```{r}
+null_distribution_cars %>%    
+  get_p_value(obs_stat = obs_diff_means, direction = "both")
+```
+
+p_value=0.002\<a=0.05,因此拒绝原假设，认为std（机械增压）与turbo（涡轮增压）的平均价格有差异，机械增压比涡轮增压价格低
+
+# **分类问题**
+
+根据不同品牌的产品定位,可将它们由低到高分为"经济型","中端型","豪华型"三类;
+
+目标：建立合适的三分类模型，以汽车硬件条件为输入，输出产品定位结果--"档次"
+
+## **数据预处理**
+
+```{r fig.height=4, fig.width=7}
+knitr::include_graphics("pic/tidyverse.png")
+knitr::include_graphics("pic/tidymodels.png")
+
+```
+
+数据采样：rsample
+
+```{r}
+# view(automobile)
+automobile_level <- automobile |> 
+  mutate(档次 = cut(价格, breaks = c(-Inf, 12000, 20000, Inf), 
+                              labels = c("经济型", "中端型", "豪华型"))) |> 
+  relocate(档次) |> 
+  select(-价格,-归一化损失)|>
+  dplyr::mutate_if(is.character, as.factor) |>
+  drop_na()
+automobile_level |> count(档次)
+```
+
+```{r warning=FALSE, paged.print=TRUE}
+# automobile|> str()
+set.seed(1222)
+
+# 数据划分，根据play_type分层
+auto_split <- initial_split(automobile_level, 0.75, strata = 档次)
+
+auto_train <- training(auto_split) # 训练集
+auto_test <- testing(auto_split) # 测试集
+auto_split
+```
+
+```{r}
+# 数据标准化
+auto_recipe <- auto_split |>  
+  training() %>%
+  recipe(档次 ~.) %>% #启动一组要应用的新转换，类似于 ggplot() 命令
+  step_corr(all_double_predictors()) %>% # 删除与其他变量具有较大绝对相关性(0.9)的变量
+  step_center(all_double_predictors()) %>% #标准化数值数据，使其均值为零
+  step_scale(all_double_predictors()) %>% #标准化数值数据，使其标准差为 1
+  prep() #在提供的数据（通常是训练数据）之上执行转换
+
+# 执行预处理
+```
+
+至此，我们一开始提出的六个问题已经全部解决
+
+1.  dummy: 质量预测变量是否需要数值编码（例如，通过虚拟变量或其他方法）？
+
+2.  zv: 是否应该删除只有单一唯一值的列？
+
+3.  impute: 如果某些变量缺失，是否应该通过插补进行估算？
+
+4.  decorrelate: 如果存在相关的预测变量，是否应该减轻这种相关性？这可能意味着过滤掉一些预测变量，例如使用主成分分析，或者采用基于模型的技术（例如正则化）。
+
+5.  normalize: 预测变量是否应该进行中心化和缩放？
+
+6.  transform: 将预测变量转换为更对称的形式是否有助于分析？
+
+解决方案：
+
+1.  dummy: 防风草包的fit函数自动转换为哑变量/因子
+
+2.  zv：无单一唯一值列，且已清除无法解释的异常值
+
+3.  impute: 数据集中缺失列已整列删除，防止了插补带来的负面影响
+
+4.  decorrelate: 强相关性数值型变量已删除，仅保留一个
+
+5.  normalize: 已进行标准化处理
+
+6.  transform: 无需取对数处理
+
+接下来，我们把模型封装进函数，准备拟合
+
+```{r}
+auto_test_r <- auto_recipe |> 
+  bake(auto_split |> testing())
+# 将准备好的训练数据加载到变量中，我们使用juice()
+auto_train_r <- juice(auto_recipe)
+
+# 把模型验证部分封装进函数
+Test <- function(data,auto_testing){
+  a <- data |> predict(auto_testing, type = "prob") |> 
+    bind_cols(auto_testing) |> 
+    roc_auc(truth = 档次, .pred_经济型:.pred_豪华型)
+  
+  data |> predict(auto_testing) |> 
+    bind_cols(auto_testing) |> 
+    metrics(truth = 档次,estimate = .pred_class) |> 
+    bind_rows(a)
+}
+
+```
+
+思路：在训练集上训练分类模型，然后在测试集上进行分类效果测试，并返回各个模型的精度与ROC曲线
+
+```{r}
+knitr::include_graphics("pic/训练模型.png")
+```
+
+例子：使用随机森林模型
+
+```{r}
+# 例子：
+# 使用随机森林模型
+auto_rf <-  rand_forest(trees = 100) %>%
+  set_mode("classification") %>% 
+  set_engine("randomForest") %>%
+  fit(档次 ~ ., data = auto_train_r)
+# 调用评估函数
+auto_rf |> Test(auto_test_r)
+# 在测试集上拟合
+```
+
+hand_till为多类别auc的平均值
+
+## **分类模型的性能比较**
+
+框架搭设完毕，开始批量打表：
+
+这里收集了十个可以做三分类的模型，将其导入
+
+```{r}
+# 框架搭设完毕，开始批量打表
+Table <- read_xlsx("data/model_engine.xlsx")
+Table
+model <- Table$Model
+engine <- Table$Engine
+```
+
+```{r message=FALSE, warning=FALSE}
+library(discrim) #部分模型匹配引擎要用
+Funct <- list() 
+Fit <- list() 
+for (i in 1:10 ) {
+  a <- str_c(model,"()")[i]
+  Funct[[model[i]]] <- 
+    eval(parse(text = a)) |> set_mode("classification") %>% 
+    set_engine(engine[i])
+} # 模型函数导入list：Funct
+for (i in 1:10) {
+  Fit[[model[i]]] <- Funct[[model[i]]] |> 
+    fit(档次 ~ ., data = auto_train_r)
+} #拟合后的模型导入list：Fit
+
+```
+
+调用Fit[[i]]可以直接查看第i个模型的具体情况，如查看5号模型随机森林：
+
+```{r}
+Fit[[5]]
+```
+
+至此，所有的准备工作已经准备完毕
+
+参赛选手：1-10号多分类模型
+
+不同引擎数量：8
+
+比赛规则：所有模型均采用初始参数
+
+胜利规则：更准的accuracy，更大的kappa，更好看的roc曲线
+
+比赛开始！
+
+```{r}
+knitr::include_graphics("pic/set_engine.png")
+```
+
+```{r warning=FALSE}
+Accuracy <- tibble()
+Kappa <- tibble()
+Roc <- tibble()
+E <- list()
+for (i in 1:10) {
+  E[[i]] <- Fit[[model[i]]] |> Test(auto_test_r)
+  Accuracy <- rbind(Accuracy,E[[i]][1,])
+  Kappa <- rbind(Kappa,E[[i]][2,])
+  Roc <- rbind(Roc,E[[i]][3,])
+}
+Accuracy <- Accuracy |> dplyr::rename(accuracy = .estimate)
+Kappa <- Kappa |> dplyr::rename(kappa = .estimate)
+Roc <- Roc |> dplyr::rename(roc_auc = .estimate)
+
+Result <- cbind(Table,Accuracy,Kappa,Roc) |> 
+  dplyr::select(Model,Engine,accuracy,kappa,roc_auc,Explain) 
+Result |> arrange(desc(accuracy))
+```
+
+```{r}
+Result |> arrange(desc(roc_auc))
+```
+
+多项式基支持向量机取得双赛道冠军！
+
+## 不同模型的ROC曲线
+
+把绘制ROC曲线封装进函数：Draw
+
+```{r warning=FALSE}
+Draw <- function(data,auto_testing){
+  data |> predict(auto_testing, type = "prob") |> 
+    bind_cols(auto_testing) |> 
+    roc_curve(档次, .pred_经济型:.pred_豪华型) %>% 
+    autoplot()
+} # 把绘制ROC曲线封装进函数：Draw
+# 画一下ROC曲线
+
+```
+
+```{r fig.height=14, fig.width=10, warning=FALSE}
+# 批量绘图
+ROC <- list() 
+for (i in 1:10) {
+  ROC[[i]] <- Fit[[model[i]]] |>
+    Draw(auto_test_r) + labs(x = model[i])
+}
+wrap_plots(ROC, ncol = 2) 
+```
+
+可以看出大多数模型对于"豪华型"车辆的分类效果均十分优异，整体分类效果良好
+
+其中svm_poly（多项式基支持向量机）取得了接近满分的预测结果
+
+在准确度赛道， Naïve Bayes \> KNN \> Logistic regression（多元）
+
+在ROC曲线面积赛道， KNN \> Naïve Bayes \> Logistic regression（多元）
+
+# **回归问题**
+
+目标：
+
+1.  对非线性关系的"油耗"与"价格"间关系，采用非参数回归拟合
+
+2.  建立合适的多元回归模型，以汽车硬件条件为输入，输出汽车的价格
+
+## **数据预处理**
+
+```{r warning=FALSE, paged.print=TRUE}
+# automobile|> str()
+set.seed(1222)
+automobile_regre <- automobile |> select(-归一化损失) |> 
+  dplyr::mutate_if(is.character, as.factor) |>
+  drop_na()
+  
+# 数据划分，根据play_type分层
+auto_split <- automobile_regre |> initial_split(0.75)
+
+auto_train <- auto_split |> training() # 训练集
+auto_test <- auto_split |> testing() # 测试集
+auto_split
+
+# 数据标准化
+auto_recipe <- auto_split |>  
+  training() %>%
+  recipe(价格 ~.) %>% #启动一组要应用的新转换，类似于 ggplot() 命令
+  step_corr(all_double_predictors()) %>% # 删除与其他变量具有较大绝对相关性(0.9)的变量
+  step_center(all_double_predictors()) %>% #标准化数值数据，使其均值为零
+  step_scale(all_double_predictors()) %>% #标准化数值数据，使其标准差为 1
+  prep() #在提供的数据（通常是训练数据）之上执行转换
+
+```
+
+归一化与标准化：
+
+```{r}
+auto_test_r <- auto_recipe |> 
+  bake(auto_split |> testing())
+# 将准备好的训练数据加载到变量中，我们使用juice()
+auto_train_r <- juice(auto_recipe)
+```
+
+## **光滑样条拟合**
+
+```{r}
+library(splines)
+
+y = automobile_regre$价格; x = automobile_regre$城市路百公里油耗
+# 使用光滑样条拟合数据
+Fit_smooth <- list()
+for (i in 1:3) {
+  Fit_smooth[[i]] <- smooth.spline(x, y,df = 5*i)
+}
+
+# 绘制拟合结果
+plot(x, y, main = "Smooth Spline Fit", col = "blue", pch = 16)
+lines(Fit_smooth[[1]], col = "#bd0026", lwd = 3)
+lines(Fit_smooth[[2]], col = "#fd8d3c", lwd = 3)
+lines(Fit_smooth[[3]], col = "#fed976", lwd = 3)
+```
+
+可以看出，随自由度由5提升到10、15，光滑样条逐渐出现过拟合现象
+
+## **局部多项式**
+
+```{r}
+y = automobile_regre$价格; x = automobile_regre$城市路百公里油耗
+# 执行局部多项式回归
+Loess_fit <- list()
+Predicted_y <- list()
+# 在新数据上进行预测
+new_x <- seq(min(x), max(x), length.out = 100)
+for (i in 1:3) {
+  Loess_fit[[i]] <- loess(y ~ x, span = 1-0.25*i)
+  Predicted_y[[i]] <- predict(Loess_fit[[i]], newdata = data.frame(x = new_x))
+}
+# 绘制原始数据和回归曲线
+plot(x, y, main = "Local Polynomial Regression", col = "blue", pch = 16)
+lines(new_x, Predicted_y[[1]], col = "#bd0026", lwd = 3)
+lines(new_x, Predicted_y[[2]], col = "#fd8d3c", lwd = 3)
+lines(new_x, Predicted_y[[3]], col = "#fed976", lwd = 3)
+
+```
+
+可以看出，随平滑度参数span由0.75降低到0.5、0.25，局部多项式逐渐出现过拟合现象
+
+## **广义可加模型**
+
+对于多元回归问题，预测变量繁多且维度高，预测变量有数值型与类别型，类型混杂；
+
+因此我们使用Generalized Additive Model：
+
+```{r}
+x <- colnames(auto_train_r |> dplyr::select(-价格))
+z <- "z"
+assign(z,str_c(x, collapse = "+"))
+z
+```
+
+```{r}
+# 使用GAM模型
+auto_GAM <-  gen_additive_mod() %>% 
+  set_engine("mgcv") %>% 
+  set_mode("regression") %>% 
+  translate()
+
+gam_fit <- auto_GAM |> fit(as.formula(paste("价格 ~ ", z)), data = auto_train_r)
+# 查看模型
+gam_fit
+```
+
+```{r}
+new_data = auto_test_r |> dplyr::select(-价格)
+
+predictions <- predict(gam_fit,auto_train_r)
+predictions_res <- bind_cols(predictions, auto_train_r |> dplyr::select(价格))
+
+predictions_res |> ggplot(aes(价格,.pred)) + 
+  geom_point(alpha = 0.5) +
+  geom_abline(lty = 2) 
+```
+
+可以看出，预测价格与真实价格大致在y=x附近，预测效果良好
+
+计算该模型的均方根误差rmse, rsq, mae：
+
+```{r}
+ames_metrics <- metric_set(rmse, rsq, mae)
+ames_metrics(predictions_res, truth = 价格, estimate = .pred)
+
+```
+
+可见模型拟合的R方高达0.97，拟合效果良好
+
+# **总结**
+
+至此，我们已完成预先设定的任务，且两主要模型：三分类模型与多元广义可加回归模型，均在测试中表现良好。
+
+通过对这一独特数据集的深入分析，我们揭示了汽车市场中隐藏的规律，为汽车制造商、市场调研人员和潜在车主提供有益的见解。这个研究不仅对汽车行业具有实际指导意义，也为数据科学和预测建模领域提供了一个充实的案例研究。
